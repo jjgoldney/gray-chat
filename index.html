@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gray Chat – Learns Your Bird</title>
+<style>
+:root{--bg:#171b22;--card:#232935;--ink:#eef1f5;--mute:#98a2b1;--red:#e0483e;--acc:#7fd1c7;--warn:#f2b84b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0 auto;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,sans-serif;padding:16px;max-width:560px}
+h1{font-size:22px;margin:2px 0}h2{font-size:15px;margin:0 0 8px;color:var(--acc)}
+.sub{color:var(--mute);margin:0 0 14px;font-size:13.5px}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px}
+button{border:0;border-radius:11px;background:#323a4a;color:var(--ink);font:inherit;padding:11px 14px;cursor:pointer}
+button:active{filter:brightness(1.3)}
+button.big{width:100%;background:var(--red);font-size:17px;font-weight:600;padding:16px}
+button.on{background:var(--acc);color:#0b2926}
+.seg{display:flex;gap:8px;margin-top:10px}.seg button{flex:1}
+.seg button.sel{background:var(--acc);color:#0b2926;font-weight:600}
+.meter{height:12px;border-radius:6px;background:#10141a;position:relative;overflow:hidden;margin:10px 0 6px}
+#lvl{height:100%;width:0;background:var(--acc);transition:width .06s}
+#thr{position:absolute;top:0;bottom:0;width:2px;background:var(--warn)}
+.mute{color:var(--mute);font-size:13px}
+.row{display:flex;align-items:center;gap:8px;margin:8px 0;flex-wrap:wrap}
+.row input[type=range]{flex:1;min-width:120px;accent-color:var(--acc)}
+.snd{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid #2f3747}
+.snd input{flex:1;min-width:0;background:#10141a;border:0;color:var(--ink);border-radius:8px;padding:8px;font:inherit}
+.snd .n{color:var(--mute);font-size:12.5px;white-space:nowrap}
+.snd button{padding:8px 11px}
+.hours{display:flex;align-items:flex-end;gap:2px;height:46px;margin-top:8px}
+.hours div{flex:1;background:var(--acc);opacity:.8;border-radius:2px 2px 0 0;min-height:2px}
+.hl{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mute)}
+#banner{display:none;background:var(--warn);color:#2b1f00;border-radius:12px;padding:10px 12px;margin-bottom:12px;font-weight:600}
+ul{margin:6px 0 0;padding-left:18px}li{margin:4px 0}
+.fb button{font-size:20px;padding:8px 18px}
+</style>
+</head>
+<body>
+<h1>🦜 Gray Chat <span class="mute" style="font-size:13px">learns your bird</span></h1>
+<p class="sub">It listens, saves the sounds your bird makes, learns which replies get a response — and can play your bird's own sounds back.</p>
+<div id="banner"></div>
+
+<div class="card">
+  <button id="start" class="big">🎤 Start listening</button>
+  <div class="meter"><div id="lvl"></div><div id="thr"></div></div>
+  <div class="mute" id="status">Mic is off.</div>
+  <div class="seg" id="modes">
+    <button data-m="learn" class="sel">👂 Just learn</button>
+    <button data-m="chat">💬 Chat back</button>
+  </div>
+  <div class="row"><span class="mute">Mic sensitivity</span><input id="sens" type="range" min="1" max="10" value="5"></div>
+  <div class="row"><span class="mute">Sound strictness</span><input id="strict" type="range" min="1" max="10" value="4">
+    <span class="mute" style="width:100%">Lower = lumps similar sounds together, higher = splits them into more types.</span></div>
+  <div class="row"><span class="mute">Playback volume</span><input id="vol" type="range" min="0" max="100" value="35"></div>
+  <div class="fb row" id="fb" style="display:none"><span class="mute">Last reply:</span>
+    <button id="up">👍</button><button id="down">👎</button></div>
+</div>
+
+<div class="card"><h2>Sounds your bird makes</h2>
+  <div id="sounds" class="mute">Nothing heard yet. Start listening and let your bird chat.</div>
+  <p class="mute" style="margin:8px 0 0">Rename them (“hello”, “wants nut”, “door bell”…). Delete ones that are noise, not your bird.</p>
+</div>
+
+<div class="card"><h2>What it has learned</h2>
+  <div id="brain" class="mute">Nothing yet — it needs a few exchanges in “Chat back” mode.</div>
+  <div class="mute" style="margin-top:10px">When your bird is vocal (by hour):</div>
+  <div class="hours" id="hours"></div>
+  <div class="hl"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>11p</span></div>
+</div>
+
+<div class="card"><h2>Your data</h2>
+  <div class="mute">Everything stays on this device. Back it up so training isn't lost.</div>
+  <div class="row"><button id="exp">Export backup</button>
+  <button id="imp">Import</button><input id="file" type="file" accept=".json" style="display:none">
+  <button id="reset">Reset all</button></div>
+</div>
+<p class="mute">Be kind to your bird: short sessions (≤10 min), watch its body language, and stop if it seems stressed. Chat mode stops itself after 10 minutes.</p>
+
+<script>
+/* ===================== DSP (pure functions) ===================== */
+//<DSP>
+function fft(re,im){const n=re.length;
+  for(let i=1,j=0;i<n;i++){let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t}}
+  for(let len=2;len<=n;len<<=1){const a=-2*Math.PI/len,wr=Math.cos(a),wi=Math.sin(a);
+    for(let i=0;i<n;i+=len){let cr=1,ci=0;for(let k=0;k<len/2;k++){const p=i+k,q=p+len/2;
+      const tr=re[q]*cr-im[q]*ci,ti=re[q]*ci+im[q]*cr;re[q]=re[p]-tr;im[q]=im[p]-ti;re[p]+=tr;im[p]+=ti;
+      const nc=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=nc}}}}
+const FN=1024,FH=512,HANN=new Float32Array(FN).map((_,i)=>0.5-0.5*Math.cos(2*Math.PI*i/(FN-1)));
+function resample(a,n){const o=[];for(let i=0;i<n;i++){const p=i*(a.length-1)/(n-1),i0=Math.floor(p),i1=Math.min(a.length-1,i0+1);o.push(a[i0]+(a[i1]-a[i0])*(p-i0))}return o}
+function features(x,sr){
+  if(x.length<FN){const y=new Float32Array(FN);y.set(x);x=y}
+  const kLo=Math.ceil(300*FN/sr),kHi=Math.min(FN/2-2,Math.floor(9000*FN/sr));
+  const F=[],R=[],C=[],FL=[];const re=new Float32Array(FN),im=new Float32Array(FN);
+  for(let s=0;s+FN<=x.length;s+=FH){
+    let e=0;for(let i=0;i<FN;i++){const v=x[s+i];e+=v*v;re[i]=v*HANN[i];im[i]=0}
+    R.push(Math.sqrt(e/FN));fft(re,im);
+    const m=new Float32Array(kHi+2);let pk=kLo,pm=0,sm=0,sf=0,lg=0,pw=0;
+    for(let k=kLo;k<=kHi;k++){m[k]=Math.hypot(re[k],im[k]);if(m[k]>pm){pm=m[k];pk=k}
+      sm+=m[k];sf+=m[k]*k;const p=m[k]*m[k]+1e-12;lg+=Math.log(p);pw+=p}
+    let d=0;if(pk>kLo&&pk<kHi){const a=m[pk-1],b=m[pk],c=m[pk+1],den=a-2*b+c;if(den!==0)d=0.5*(a-c)/den}
+    F.push((pk+d)*sr/FN);C.push(sm>0?(sf/sm)*sr/FN:1000);
+    const n=kHi-kLo+1;FL.push(Math.exp(lg/n)/(pw/n))}
+  const mx=Math.max(...R)||1e-9,voiced=R.map(r=>r>=0.25*mx);
+  let last=null;const f=F.map((v,i)=>{if(voiced[i])last=v;return voiced[i]?v:NaN});
+  let first=f.find(v=>!isNaN(v));if(first===undefined)first=1000;
+  last=first;for(let i=0;i<f.length;i++){if(isNaN(f[i]))f[i]=last;else last=f[i]}
+  const lf=f.map(v=>Math.log2(Math.max(300,Math.min(9000,v))));
+  const vi=voiced.map((v,i)=>v?i:-1).filter(i=>i>=0);
+  const cen=vi.length?vi.reduce((a,i)=>a+Math.log2(Math.max(300,C[i])),0)/vi.length:Math.log2(1000);
+  const fla=vi.length?vi.reduce((a,i)=>a+FL[i],0)/vi.length:0.5;
+  const dur=x.length/sr;
+  const pitch=resample(lf,8).map(v=>(v-Math.log2(300))/5);
+  const env=resample(R.map(r=>r/mx),8);
+  return{vec:[...pitch,...env,(cen-Math.log2(300))/5,Math.sqrt(Math.min(1,fla)),Math.log2(Math.max(dur,0.05)/0.05)/6],dur};
+}
+const W=[1,1,1,1,1,1,1,1,.4,.4,.4,.4,.4,.4,.4,.4,1,1,1];
+function dist(a,b){let s=0,w=0;for(let i=0;i<a.length;i++){s+=W[i]*(a[i]-b[i])*(a[i]-b[i]);w+=W[i]}return Math.sqrt(s/w)}
+//</DSP>
+
+/* ===================== State & storage ===================== */
+const $=s=>document.querySelector(s),rnd=(a,b)=>a+Math.random()*(b-a),pick=a=>a[Math.floor(Math.random()*a.length)];
+const now=()=>performance.now()/1000;
+let M={clusters:[],q:{},hour:{ev:Array(24).fill(0),sec:Array(24).fill(0)},nextId:1,created:Date.now()};
+let db=null,saveT=null;
+function openDB(){return new Promise(res=>{try{const r=indexedDB.open('graychat',1);
+  r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>{db=r.result;res()};r.onerror=()=>res()}catch(e){res()}})}
+function load(){return new Promise(res=>{if(!db)return res();try{const g=db.transaction('kv').objectStore('kv').get('model');
+  g.onsuccess=()=>{if(g.result)M=g.result;res()};g.onerror=()=>res()}catch(e){res()}})}
+function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{db&&db.transaction('kv','readwrite').objectStore('kv').put(M,'model')}catch(e){}},800)}
+
+/* ===================== Synth (fallback calls) ===================== */
+let ctx,master,stream,proc,src;
+function tone(t0,pts,{type='sine',gain=.5,vib=0,vibHz=0,harm=0}={}){
+  const dur=pts[pts.length-1][0],o=ctx.createOscillator(),g=ctx.createGain();o.type=type;
+  o.frequency.setValueAtTime(pts[0][1],t0);for(let i=1;i<pts.length;i++)o.frequency.linearRampToValueAtTime(pts[i][1],t0+pts[i][0]);
+  g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(gain,t0+Math.min(.02,dur/3));
+  g.gain.setValueAtTime(gain,t0+Math.max(dur-.04,dur/2));g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+  if(vib){const l=ctx.createOscillator(),lg=ctx.createGain();l.frequency.value=vibHz;lg.gain.value=vib;l.connect(lg);lg.connect(o.frequency);l.start(t0);l.stop(t0+dur+.05)}
+  o.connect(g);g.connect(master);o.start(t0);o.stop(t0+dur+.05);
+  if(harm){const o2=ctx.createOscillator(),g2=ctx.createGain();o2.frequency.setValueAtTime(pts[0][1]*2,t0);
+    for(let i=1;i<pts.length;i++)o2.frequency.linearRampToValueAtTime(pts[i][1]*2,t0+pts[i][0]);
+    g2.gain.setValueAtTime(.0001,t0);g2.gain.exponentialRampToValueAtTime(gain*harm,t0+.02);g2.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+    o2.connect(g2);g2.connect(master);o2.start(t0);o2.stop(t0+dur+.05)}
+  return dur}
+function clk(t0,f){const len=ctx.sampleRate*.025,b=ctx.createBuffer(1,len,ctx.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,4);
+  const s=ctx.createBufferSource();s.buffer=b;const bp=ctx.createBiquadFilter();bp.type='bandpass';bp.frequency.value=f;bp.Q.value=4;
+  s.connect(bp);bp.connect(master);s.start(t0)}
+const S={
+ whistle(t){const f=rnd(1500,2400),up=Math.random()<.5;return tone(t,[[0,up?f:f*1.5],[rnd(.35,.6),up?f*1.5:f]],{vib:20,vibHz:7,harm:.15})},
+ wolf(t){return tone(t,[[0,1100],[.35,2600],[.5,2600],[.9,1000]],{vib:15,vibHz:6,harm:.12})},
+ contact(t){let x=t;const f=rnd(2200,2800);x+=tone(x,[[0,f*.8],[.12,f*1.15],[.25,f*.95]],{type:'triangle',harm:.3})+.1;
+   x+=tone(x,[[0,f*.8],[.12,f*1.2],[.3,f]],{type:'triangle',harm:.3});return x-t},
+ chirp(t){let x=t;for(let i=0;i<3+Math.floor(Math.random()*3);i++){const f=rnd(2400,3800);x+=tone(x,[[0,f],[.05,f*1.25],[.1,f*.9]],{gain:.4,harm:.2})+rnd(.04,.1)}return x-t},
+ trill(t){const f=rnd(1900,2600);return tone(t,[[0,f],[.7,f*1.05]],{gain:.4,vib:f*.18,vibHz:rnd(18,26),harm:.2})},
+ click(t){let x=0;for(let i=0;i<2+Math.floor(Math.random()*4);i++){clk(t+x,rnd(1400,2400));x+=rnd(.1,.22)}return x},
+ kiss(t){const f=rnd(2800,3600);return tone(t,[[0,f*.6],[.06,f*1.3],[.18,f*1.7]],{gain:.35,harm:.2})},
+ mimic(t){let x=t;const f=pick([1800,2000,2400]);for(let i=0;i<pick([2,3,4]);i++)x+=tone(x,[[0,f],[.14,f]],{type:'square',gain:.12})+.1;return x-t}};
+const SYN=Object.keys(S);
+
+function playClip(c){const clip=pick(c.clips);if(!clip)return 0;
+  const f=new Float32Array(clip.data.length);for(let i=0;i<f.length;i++)f[i]=clip.data[i]/32767;
+  const b=ctx.createBuffer(1,f.length,clip.sr);b.getChannelData(0).set(f);
+  const s=ctx.createBufferSource();s.buffer=b;const g=ctx.createGain();g.gain.value=1.4;
+  s.connect(g);g.connect(master);s.start();return b.duration}
+
+/* ===================== Listening / event detection ===================== */
+let mode='learn',listening=false,floor=0.004,hot=0,inEv=false,evChunks=[],pre=[],quiet=0,evStart=0,muteUntil=0,lastAct=0,lastReply=0,
+    pending=null,unanswered=0,cooldown=0,chatStart=0,lastLevel=0,thrNow=.01,lastEv=null;
+const sens=()=>+$('#sens').value,strictThr=()=>0.02+ +$("#strict").value*0.01;
+function handle(buf){
+  const t=now();let e=0;for(let i=0;i<buf.length;i++)e+=buf[i]*buf[i];const rms=Math.sqrt(e/buf.length);lastLevel=rms;
+  const cd=buf.length/ctx.sampleRate;
+  if(t<muteUntil){inEv=false;evChunks=[];pre=[];hot=0;return}
+  thrNow=Math.max(floor*3.5,0.03/sens());
+  if(!inEv){if(rms<thrNow)floor=Math.max(1e-4,floor*.97+rms*.03);
+    pre.push(buf);if(pre.length>4)pre.shift();
+    if(rms>thrNow){hot++;if(hot>=2){inEv=true;evChunks=pre.slice();evStart=t-pre.length*cd;quiet=0;pre=[]}}else hot=0}
+  else{evChunks.push(buf);if(rms<thrNow*.7)quiet+=cd;else quiet=0;
+    if(quiet>=0.45||evChunks.length*cd>8)finish(t,cd)}
+}
+function finish(t,cd){
+  inEv=false;hot=0;let ch=evChunks;evChunks=[];
+  const trim=Math.max(0,Math.floor(quiet/cd)-2);if(trim>0&&trim<ch.length)ch=ch.slice(0,ch.length-trim);
+  const n=ch.reduce((a,c)=>a+c.length,0),x=new Float32Array(n);let o=0;for(const c of ch){x.set(c,o);o+=c.length}
+  const sr=ctx.sampleRate;if(n/sr<0.08)return;
+  setTimeout(()=>onBirdSound(x,sr,evStart,t),0)
+}
+function nearest(vec){let b=null,bd=9;for(const c of M.clusters){const d=dist(vec,c.vec);if(d<bd){bd=d;b=c}}return{c:b,d:bd}}
+function onBirdSound(x,sr,t0,t1){
+  const f=features(x,sr),{c,d}=nearest(f.vec);let cl;
+  if(c&&d<strictThr()){cl=c;c.vec=c.vec.map((v,i)=>(v*c.n+f.vec[i])/(c.n+1));c.n++;c.dur=(c.dur*(c.n-1)+f.dur)/c.n}
+  else{cl={id:M.nextId++,name:'Sound '+(M.nextId-1),vec:f.vec,n:1,dur:f.dur,clips:[]};M.clusters.push(cl)}
+  if(cl.clips.length<5||Math.random()<.2){const i16=new Int16Array(x.length);for(let i=0;i<x.length;i++)i16[i]=Math.max(-1,Math.min(1,x[i]))*32767;
+    const clip={sr,data:i16};if(cl.clips.length<5)cl.clips.push(clip);else cl.clips[Math.floor(Math.random()*5)]=clip}
+  const h=new Date().getHours();M.hour.ev[h]++;
+  lastEv=cl;lastAct=t1;unanswered=0;
+  // reward for pending action
+  if(pending&&t0>=pending.end-0.05&&t0<=pending.deadline){
+    const r=1+(pending.played&&pending.played===cl.id?1:0);credit(pending.ctx,pending.action,r);pending=null}
+  save();render();
+  if(mode==='chat')setTimeout(()=>reply(cl),rnd(600,1100));
+}
+
+/* ===================== Policy (UCB bandit) ===================== */
+function credit(ctxk,a,r){const t=M.q[ctxk]||(M.q[ctxk]={}),s=t[a]||(t[a]={n:0,m:0});s.n++;s.m+=(r-s.m)/s.n;save();renderBrain()}
+function choose(ctxk,acts){const t=M.q[ctxk]||{};let N=0;acts.forEach(a=>N+=(t[a]?t[a].n:0));let best=acts[0],bs=-9;
+  for(const a of acts){const s=t[a]||{n:0,m:.3};const sc=s.m+.6*Math.sqrt(Math.log(N+2)/(s.n+1))+Math.random()*.02;if(sc>bs){bs=sc;best=a}}return best}
+function perform(ctxk,a,cl){
+  let dur=0,played=null;const t=ctx.currentTime+.05;
+  if(a==='echo'&&cl&&cl.clips.length){dur=playClip(cl);played=cl.id}
+  else if(a==='other'){const o=M.clusters.filter(c=>c.clips.length&&(!cl||c.id!==cl.id));if(o.length){const c=pick(o);dur=playClip(c);played=c.id}}
+  else if(a==='clip'){const o=M.clusters.filter(c=>c.clips.length);if(o.length){const c=pick(o);dur=playClip(c);played=c.id}}
+  else if(a.startsWith('synth:'))dur=S[a.slice(6)](t);
+  const tn=now();muteUntil=tn+dur+.7;lastReply=tn;lastAct=tn+dur;
+  pending={ctx:ctxk,action:a,end:tn+dur+.7,deadline:tn+dur+.7+12,played};
+  if(a!=='silence'){$('#fb').style.display='flex'}
+  $('#status').textContent=a==='silence'?'Listening quietly…':'Played: '+actLabel(a)+(played?' ('+nm(played)+')':'');
+}
+function reply(cl){
+  if(mode!=='chat'||!listening)return;const t=now();
+  if(t-lastReply<6||t<muteUntil||unanswered>=4)return;
+  const acts=['silence',...SYN.map(s=>'synth:'+s)];if(cl.clips.length)acts.push('echo');if(M.clusters.filter(c=>c!==cl&&c.clips.length).length)acts.push('other');
+  const ctxk='c:'+cl.id,a=choose(ctxk,acts);perform(ctxk,a,cl);
+}
+function idleWait(){const h=new Date().getHours(),sc=i=>M.hour.sec[i]>60?M.hour.ev[i]/(M.hour.sec[i]/60):null;
+  const all=M.hour.ev.reduce((a,b)=>a+b,0)/Math.max(1,M.hour.sec.reduce((a,b)=>a+b,0)/60),mine=sc(h);
+  const r=mine!==null&&all>0?Math.max(.3,Math.min(3,mine/all)):1;return Math.max(25,Math.min(150,60/r))}
+let wait=60;
+function tick(){
+  if(!listening)return;const t=now(),h=new Date().getHours();M.hour.sec[h]++;
+  if(pending&&t>pending.deadline){const p=pending;pending=null;credit(p.ctx,p.action,0);if(p.action!=='silence'&&(++unanswered)>=4){cooldown=t+120;$('#status').textContent='No answers for a while — resting 2 min.'}}
+  if(mode==='chat'){
+    if(t-chatStart>600){setMode('learn');banner('10 minutes of chatting done — back to listen-only. Give your bird a break! 🦜')}
+    else if(!pending&&t>muteUntil&&t>cooldown&&t-lastAct>wait&&t-lastReply>6){
+      const acts=['silence',...SYN.map(s=>'synth:'+s)];if(M.clusters.some(c=>c.clips.length))acts.push('clip');
+      perform('idle',choose('idle',acts),null);wait=idleWait()*rnd(.8,1.3)}}
+  if(M.hour.sec[h]%20===0)save();
+  renderHours();
+}
+
+/* ===================== UI ===================== */
+const nm=id=>{const c=M.clusters.find(c=>c.id===id);return c?c.name:'?'};
+function actLabel(a){if(a==='echo')return "its own sound, echoed back";if(a==='other')return 'a different sound it made';if(a==='clip')return 'one of its sounds';
+  if(a==='silence')return 'stay quiet';return 'synth '+a.slice(6)}
+function render(){
+  const el=$('#sounds');if(!M.clusters.length){el.className='mute';el.textContent='Nothing heard yet. Start listening and let your bird chat.';renderBrain();return}
+  el.className='';el.innerHTML='';
+  [...M.clusters].sort((a,b)=>b.n-a.n).forEach(c=>{const d=document.createElement('div');d.className='snd';
+    d.innerHTML='<button title="Play">▶</button><input value=""><span class="n"></span><button title="Delete">✕</button>';
+    const [pb,,,xb]=d.children;d.children[1].value=c.name;d.children[2].textContent=c.n+'× · '+c.dur.toFixed(1)+'s';
+    pb.onclick=()=>{if(ctx&&c.clips.length){const dur=playClip(c);muteUntil=now()+dur+.7}};
+    d.children[1].onchange=e=>{c.name=e.target.value||c.name;save();renderBrain()};
+    xb.onclick=()=>{M.clusters=M.clusters.filter(k=>k!==c);delete M.q['c:'+c.id];save();render()};
+    el.appendChild(d)});
+  renderBrain()}
+function renderBrain(){
+  const out=[];for(const k in M.q){const t=M.q[k],tot=Object.values(t).reduce((a,s)=>a+s.n,0);if(tot<3)continue;
+    const best=Object.entries(t).filter(([a,s])=>s.n>=2).sort((a,b)=>b[1].m-a[1].m)[0];if(!best)continue;
+    const who=k==='idle'?'When it’s quiet':'After “'+(M.clusters.find(c=>'c:'+c.id===k)||{name:'(deleted)'}).name+'”';
+    out.push('<li><b>'+who+'</b>: best so far → '+actLabel(best[0])+' <span class="mute">(bird answered '+Math.round(best[1].m*50)+'% of max, '+best[1].n+' tries)</span></li>')}
+  $('#brain').className=out.length?'':'mute';
+  $('#brain').innerHTML=out.length?'<ul>'+out.join('')+'</ul>':'Nothing yet — it needs a few exchanges in “Chat back” mode.'}
+function renderHours(){const rates=M.hour.ev.map((e,i)=>M.hour.sec[i]>30?e/(M.hour.sec[i]/60):0),mx=Math.max(...rates,1e-6);
+  $('#hours').innerHTML=rates.map(r=>'<div style="height:'+Math.max(4,r/mx*100)+'%"></div>').join('')}
+function banner(t){const b=$('#banner');b.textContent=t;b.style.display='block';setTimeout(()=>b.style.display='none',15000)}
+function setMode(m){mode=m;if(m==='chat'){chatStart=now();unanswered=0;cooldown=0;wait=idleWait();lastAct=now()}
+  document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('sel',b.dataset.m===m))}
+document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>setMode(b.dataset.m));
+$('#vol').oninput=e=>{if(master)master.gain.value=e.target.value/100};
+$('#up').onclick=()=>{if(M.lastFb)credit(M.lastFb.c,M.lastFb.a,1.5)};
+$('#down').onclick=()=>{if(M.lastFb)credit(M.lastFb.c,M.lastFb.a,-1)};
+const _perform=perform;perform=function(c,a,cl){_perform(c,a,cl);if(a!=='silence')M.lastFb={c,a}};
+
+$('#start').onclick=async()=>{
+  if(listening){stop();return}
+  try{
+    ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();await ctx.resume();
+    master=ctx.createGain();master.gain.value=$('#vol').value/100;master.connect(ctx.destination);
+    stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    src=ctx.createMediaStreamSource(stream);proc=ctx.createScriptProcessor(2048,1,1);
+    proc.onaudioprocess=e=>handle(new Float32Array(e.inputBuffer.getChannelData(0)));
+    const mute=ctx.createGain();mute.gain.value=0;src.connect(proc);proc.connect(mute);mute.connect(ctx.destination);
+    listening=true;floor=.004;lastAct=now();$('#start').textContent='⏹ Stop listening';$('#start').classList.add('on');
+    $('#status').textContent='Listening… make some noise to test the meter.';
+  }catch(err){$('#status').textContent='Microphone unavailable: '+err.message+'. This page must be opened from localhost or https, and mic access allowed.'}
+};
+function stop(){listening=false;try{proc.disconnect();src.disconnect();stream.getTracks().forEach(t=>t.stop())}catch(e){}
+  $('#start').textContent='🎤 Start listening';$('#start').classList.remove('on');$('#status').textContent='Mic is off.';save()}
+setInterval(()=>{if(listening){$('#lvl').style.width=Math.min(100,lastLevel*600)+'%';$('#thr').style.left=Math.min(99,thrNow*600)+'%'}},60);
+setInterval(tick,1000);
+
+function b64(u8){let s='';for(let i=0;i<u8.length;i+=8192)s+=String.fromCharCode.apply(null,u8.subarray(i,i+8192));return btoa(s)}
+$('#exp').onclick=()=>{const m=JSON.parse(JSON.stringify(M,(k,v)=>v instanceof Int16Array?{__i16:b64(new Uint8Array(v.buffer))}:v));
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(m)],{type:'application/json'}));
+  a.download='graychat-backup.json';a.click()};
+$('#imp').onclick=()=>$('#file').click();
+$('#file').onchange=async e=>{const f=e.target.files[0];if(!f)return;
+  M=JSON.parse(await f.text(),(k,v)=>{if(v&&v.__i16){const s=atob(v.__i16),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return new Int16Array(u.buffer)}return v});
+  save();render();renderHours()};
+$('#reset').onclick=()=>{if(confirm('Delete everything learned so far?')){M={clusters:[],q:{},hour:{ev:Array(24).fill(0),sec:Array(24).fill(0)},nextId:1,created:Date.now()};save();render();renderHours()}};
+openDB().then(load).then(()=>{render();renderHours()});
+</script>
+</body>
+</html>

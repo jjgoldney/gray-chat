@@ -63,7 +63,7 @@ select{background:#10141a;color:var(--ink);border:0;border-radius:8px;padding:8p
   <div class="row"><span class="mute">Mic sensitivity</span><input id="sens" type="range" min="1" max="10" value="5"></div>
   <div class="row"><span class="mute">Sound strictness</span><input id="strict" type="range" min="1" max="10" value="6">
     <span class="mute" style="width:100%">Lower = lumps similar sounds together, higher = splits them into more types.</span></div>
-  <div class="row"><span class="mute">Playback volume</span><input id="vol" type="range" min="0" max="100" value="35"></div>
+  <div class="row"><span class="mute">Playback volume</span><input id="vol" type="range" min="0" max="100" value="70"></div>
   <div class="fb row" id="fb" style="display:none"><span class="mute">Last reply:</span>
     <button id="up">👍</button><button id="down">👎</button></div>
 </div>
@@ -225,8 +225,12 @@ const S={
  mimic(t){let x=t;const f=pick([1800,2000,2400]);for(let i=0;i<pick([2,3,4]);i++)x+=tone(x,[[0,f],[.14,f]],{type:'square',gain:.12})+.1;return x-t}};
 const SYN=Object.keys(S);
 
-function playF32(f,sr){const b=ctx.createBuffer(1,f.length,sr);b.getChannelData(0).set(f);
-  const s=ctx.createBufferSource();s.buffer=b;const g=ctx.createGain();g.gain.value=1.4;s.connect(g);g.connect(master);s.start();return b.duration}
+function ensureAudio(){if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();
+  if(ctx.state==='suspended')ctx.resume();
+  if(!master){master=ctx.createGain();master.gain.value=$('#vol').value/100;master.connect(ctx.destination)}}
+function playF32(f,sr){ensureAudio();let pk=0;for(let i=0;i<f.length;i++){const a=Math.abs(f[i]);if(a>pk)pk=a}
+  const b=ctx.createBuffer(1,f.length,sr);b.getChannelData(0).set(f);
+  const s=ctx.createBufferSource();s.buffer=b;const g=ctx.createGain();g.gain.value=Math.min(30,.8/Math.max(pk,.01));s.connect(g);g.connect(master);s.start();return b.duration}
 function playClip(c){const clip=pick(c.clips);if(!clip)return 0;
   const f=new Float32Array(clip.data.length);for(let i=0;i<f.length;i++)f[i]=clip.data[i]/32767;return playF32(f,clip.sr)}
 
@@ -283,7 +287,7 @@ function credit(ctxk,a,r){const t=M.q[ctxk]||(M.q[ctxk]={}),s=t[a]||(t[a]={n:0,m
 function choose(ctxk,acts){const t=M.q[ctxk]||{};let N=0;acts.forEach(a=>N+=(t[a]?t[a].n:0));let best=acts[0],bs=-9;
   for(const a of acts){const s=t[a]||{n:0,m:.3};const sc=s.m+.6*Math.sqrt(Math.log(N+2)/(s.n+1))+Math.random()*.02;if(sc>bs){bs=sc;best=a}}return best}
 function perform(ctxk,a,cl){
-  let dur=0,played=null;const t=ctx.currentTime+.05;
+  ensureAudio();let dur=0,played=null;const t=ctx.currentTime+.05;
   if(a==='echo'&&cl&&cl.clips.length){dur=playClip(cl);played=cl.id}
   else if(a==='other'){const o=M.clusters.filter(c=>c.clips.length&&(!cl||c.id!==cl.id));if(o.length){const c=pick(o);dur=playClip(c);played=c.id}}
   else if(a.startsWith('clip:')){const o=M.clusters.filter(c=>c.clips.length&&ownerOf(c).key===a[5]);if(o.length){const c=pick(o);dur=playClip(c);played=c.id}}
@@ -331,7 +335,7 @@ function renderCard(){const k=card,el=$('#heard');if(!k){el.style.display='none'
   $('#hguess').textContent=g.bird==='?'?'Not sure who':('Looks like '+BN[g.bird]+' ('+Math.round(g.conf*100)+'%)'+(g.mim?' – or Ruby copying':''));
   chips('#hbird',[['R','Ruby'],['K','Kiwi'],['B','Both / not sure'],['M','Ruby copying Kiwi']],k.tag||'',tagBird,g.bird==='?'?'':g.bird);
   chips('#htype',[['whistle','Whistle'],['sound','Sound'],['word','Word']],k.type||k.cl.type||'',tagType,k.cl.type?'':(k.f.fla<0.004?'whistle':'sound'));
-  $('#hp').onclick=()=>{if(ctx){const d=playF32(k.x,k.sr);muteUntil=now()+d+.7}}}
+  $('#hp').onclick=()=>{const d=playF32(k.x,k.sr);muteUntil=now()+d+.7}}
 function renderFilters(){
   chips('#fbird',[['','All'],['R','Ruby'],['K','Kiwi'],['B','Both / copies']],fBird,v=>{fBird=v;render()});
   chips('#ftype',[['','All types'],['whistle','Whistles'],['sound','Sounds'],['word','Words']],fType,v=>{fType=v;render()})}
@@ -347,7 +351,7 @@ function render(){
     inp.value=c.name;cnt.textContent=c.n+'× · '+c.dur.toFixed(1)+'s';
     ob.innerHTML='<option value="">Who: auto ('+ownLabel(c)+')</option>'+['R','K','B','M'].map(k=>'<option value="'+k+'">'+BN[k]+'</option>').join('');ob.value=c.ownerSet||'';
     ty.innerHTML='<option value="">Type?</option><option value="whistle">Whistle</option><option value="sound">Sound</option><option value="word">Word</option>';ty.value=c.type||'';
-    pb.onclick=()=>{if(ctx&&c.clips.length){const dur=playClip(c);muteUntil=now()+dur+.7}};
+    pb.onclick=()=>{if(c.clips.length){const dur=playClip(c);muteUntil=now()+dur+.7}};
     inp.onchange=e=>{c.name=e.target.value.trim()||c.name;mergeSameNames();save();render()};
     ob.onchange=e=>{c.ownerSet=e.target.value;save();render()};ty.onchange=e=>{c.type=e.target.value;save();render()};
     xb.onclick=()=>{M.clusters=M.clusters.filter(k=>k!==c);delete M.q['c:'+c.id];if(card&&card.cl===c)card=null;save();render();renderCard()};
@@ -378,8 +382,7 @@ const _perform=perform;perform=function(c,a,cl){_perform(c,a,cl);if(a!=='silence
 $('#start').onclick=async()=>{
   if(listening){stop();return}
   try{
-    ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();await ctx.resume();
-    master=ctx.createGain();master.gain.value=$('#vol').value/100;master.connect(ctx.destination);
+    ensureAudio();await ctx.resume();
     stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
     src=ctx.createMediaStreamSource(stream);proc=ctx.createScriptProcessor(2048,1,1);
     proc.onaudioprocess=e=>handle(new Float32Array(e.inputBuffer.getChannelData(0)));

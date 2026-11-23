@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Gray Chat – Learns Your Bird</title>
+<title>Gray Chat – Ruby &amp; Kiwi</title>
 <style>
 :root{--bg:#171b22;--card:#232935;--ink:#eef1f5;--mute:#98a2b1;--red:#e0483e;--acc:#7fd1c7;--warn:#f2b84b}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -28,16 +28,28 @@ button.on{background:var(--acc);color:#0b2926}
 .snd .n{color:var(--mute);font-size:12.5px;white-space:nowrap}
 .snd button{padding:8px 11px}
 .hours{display:flex;align-items:flex-end;gap:2px;height:46px;margin-top:8px}
-.hours div{flex:1;background:var(--acc);opacity:.8;border-radius:2px 2px 0 0;min-height:2px}
+.hours div{border-radius:2px 2px 0 0;min-height:2px}
 .hl{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mute)}
 #banner{display:none;background:var(--warn);color:#2b1f00;border-radius:12px;padding:10px 12px;margin-bottom:12px;font-weight:600}
 ul{margin:6px 0 0;padding-left:18px}li{margin:4px 0}
 .fb button{font-size:20px;padding:8px 18px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
+.chips button{padding:8px 11px;font-size:14px}
+.chips button.sel{background:var(--acc);color:#0b2926;font-weight:600}
+.chips button.sug{outline:2px dashed var(--warn)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex:none}
+.snd{flex-direction:column;align-items:stretch;gap:6px}
+.l1,.l2{display:flex;align-items:center;gap:8px}
+.l2{padding-left:2px}
+select{background:#10141a;color:var(--ink);border:0;border-radius:8px;padding:8px;font:inherit;font-size:13.5px;flex:1;min-width:0}
+.hours div.p{background:#b48cf2}.hours div.o{background:#f2a65a}
+.hb{flex:1;display:flex;align-items:flex-end;gap:1px;height:100%}.hb div{flex:1}
+.hours{gap:3px}
 </style>
 </head>
 <body>
-<h1>🦜 Gray Chat <span class="mute" style="font-size:13px">learns your bird</span></h1>
-<p class="sub">It listens, saves the sounds your bird makes, learns which replies get a response — and can play your bird's own sounds back.</p>
+<h1>🦜 Gray Chat <span class="mute" style="font-size:13px">Ruby &amp; Kiwi</span></h1>
+<p class="sub">It listens, tells Ruby and Kiwi apart, saves their sounds, learns which replies get an answer — and can play their own sounds back.</p>
 <div id="banner"></div>
 
 <div class="card">
@@ -49,21 +61,28 @@ ul{margin:6px 0 0;padding-left:18px}li{margin:4px 0}
     <button data-m="chat">💬 Chat back</button>
   </div>
   <div class="row"><span class="mute">Mic sensitivity</span><input id="sens" type="range" min="1" max="10" value="5"></div>
-  <div class="row"><span class="mute">Sound strictness</span><input id="strict" type="range" min="1" max="10" value="4">
+  <div class="row"><span class="mute">Sound strictness</span><input id="strict" type="range" min="1" max="10" value="6">
     <span class="mute" style="width:100%">Lower = lumps similar sounds together, higher = splits them into more types.</span></div>
   <div class="row"><span class="mute">Playback volume</span><input id="vol" type="range" min="0" max="100" value="35"></div>
   <div class="fb row" id="fb" style="display:none"><span class="mute">Last reply:</span>
     <button id="up">👍</button><button id="down">👎</button></div>
 </div>
 
-<div class="card"><h2>Sounds your bird makes</h2>
+<div class="card" id="heard" style="display:none"><h2>Just heard</h2>
+  <div class="row"><button id="hp">▶</button><b id="hname"></b><span class="mute" id="hguess"></span></div>
+  <div class="mute">Who made it? (tap to teach it — Ruby sometimes copies Kiwi, so use the last button then)</div><div class="chips" id="hbird"></div>
+  <div class="mute">What kind of sound?</div><div class="chips" id="htype"></div>
+</div>
+
+<div class="card"><h2>Sounds Ruby &amp; Kiwi make</h2>
+  <div class="chips" id="fbird"></div><div class="chips" id="ftype"></div>
   <div id="sounds" class="mute">Nothing heard yet. Start listening and let your bird chat.</div>
-  <p class="mute" style="margin:8px 0 0">Rename them (“hello”, “wants nut”, “door bell”…). Delete ones that are noise, not your bird.</p>
+  <p class="mute" style="margin:8px 0 0">Rename sounds freely. Give two sounds the same name and they merge into one. Delete ones that are just noise.</p>
 </div>
 
 <div class="card"><h2>What it has learned</h2>
   <div id="brain" class="mute">Nothing yet — it needs a few exchanges in “Chat back” mode.</div>
-  <div class="mute" style="margin-top:10px">When your bird is vocal (by hour):</div>
+  <div class="mute" style="margin-top:10px">When they’re vocal (by hour): <span style="color:#b48cf2">Ruby</span> · <span style="color:#f2a65a">Kiwi</span></div>
   <div class="hours" id="hours"></div>
   <div class="hl"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>11p</span></div>
 </div>
@@ -111,21 +130,69 @@ function features(x,sr){
   const dur=x.length/sr;
   const pitch=resample(lf,8).map(v=>(v-Math.log2(300))/5);
   const env=resample(R.map(r=>r/mx),8);
-  return{vec:[...pitch,...env,(cen-Math.log2(300))/5,Math.sqrt(Math.min(1,fla)),Math.log2(Math.max(dur,0.05)/0.05)/6],dur};
+  const pks=vi.map(i=>F[i]).sort((a,b)=>a-b),pk=pks.length?pks[Math.floor(pks.length/2)]:1000;
+  return{vec:[...pitch,...env,(cen-Math.log2(300))/5,Math.sqrt(Math.min(1,fla)),Math.log2(Math.max(dur,0.05)/0.05)/6],dur,pk,fla};
 }
 const W=[1,1,1,1,1,1,1,1,.4,.4,.4,.4,.4,.4,.4,.4,1,1,1];
 function dist(a,b){let s=0,w=0;for(let i=0;i<a.length;i++){s+=W[i]*(a[i]-b[i])*(a[i]-b[i]);w+=W[i]}return Math.sqrt(s/w)}
+
+/* ---- bird logic (pure; uses global M) ---- */
+function ownerOf(c){
+  if(c.ownerSet)return{key:c.ownerSet,sure:true};
+  const w=c.who||{R:0,K:0,B:0,M:0};
+  if(w.M>0)return{key:'M',sure:true};
+  if(w.R>0&&w.K>0)return{key:'B',sure:true};
+  if(w.B>0&&!w.R&&!w.K)return{key:'B',sure:true};
+  if(w.R>0)return{key:'R',sure:true};if(w.K>0)return{key:'K',sure:true};
+  const a=c.auto||{};if((a.R||0)>(a.K||0)&&(a.R||0)>=(a['?']||0)*.5)return{key:'R',sure:false};
+  if((a.K||0)>(a.R||0))return{key:'K',sure:false};return{key:'?',sure:false}}
+function guessBird(f,cl){
+  const lab=[];M.clusters.forEach(c=>c.clips.forEach(k=>{if((k.bird==='R'||k.bird==='K')&&k.pk&&k.vec)lab.push(k)}));
+  const nR=lab.filter(k=>k.bird==='R').length,nK=lab.length-nR;let b='?',conf=0,how='pitch';
+  if(nR>=4&&nK>=4){
+    const d=k=>Math.abs(Math.log2(f.pk/k.pk))+.5*Math.abs(f.vec[16]-k.vec[16])*5+.3*Math.abs(f.vec[18]-k.vec[18])*6;
+    const nn=lab.map(k=>({b:k.bird,d:d(k)})).sort((a,b)=>a.d-b.d).slice(0,5);
+    let sr=0,sk=0;nn.forEach(n=>{const w=1/(n.d+.05);if(n.b==='R')sr+=w;else sk+=w});
+    b=sr>sk?'R':'K';conf=.9*Math.max(sr,sk)/(sr+sk);how='learned'}
+  else{const p=f.pk;if(p<1900){b='R';conf=.9}else if(p<2250){b='R';conf=.65}else if(p>3000){b='K';conf=.85}else if(p>2600){b='K';conf=.65}}
+  if(conf<.55)b='?';
+  const mim=b==='K'&&cl&&cl.who&&cl.who.M>0;if(mim)conf=Math.min(conf,.5);
+  return{bird:b,conf,how,mim}}
+function mergeInto(a,b){const n=a.n+b.n;a.vec=a.vec.map((v,i)=>(v*a.n+b.vec[i]*b.n)/n);a.dur=(a.dur*a.n+b.dur*b.n)/n;a.n=n;
+  a.clips=a.clips.concat(b.clips).sort((x,y)=>(y.bird?1:0)-(x.bird?1:0)).slice(0,8);
+  for(const k in b.who)a.who[k]=(a.who[k]||0)+b.who[k];for(const k in b.auto)a.auto[k]=(a.auto[k]||0)+b.auto[k];
+  a.type=a.type||b.type;a.ownerSet=a.ownerSet||b.ownerSet;
+  M.clusters=M.clusters.filter(c=>c!==b);delete M.q['c:'+b.id];
+  const t=M.q['c:'+a.id]||{};}
+function mergeSameNames(){let changed=true;while(changed){changed=false;
+  for(const a of M.clusters){const b=M.clusters.find(c=>c!==a&&c.name.trim().toLowerCase()===a.name.trim().toLowerCase());
+    if(b){mergeInto(a,b);changed=true;break}}}}
+function migrate(m){
+  M=m;m.hour.evR=m.hour.evR||Array(24).fill(0);m.hour.evK=m.hour.evK||Array(24).fill(0);m.turn=m.turn||{};m.ansBird=m.ansBird||{R:0,K:0};
+  if(m.v>=2)return m;
+  for(const c of m.clusters){
+    c.who={R:0,K:0,B:0,M:0};c.auto={R:0,K:0,'?':0};c.type=c.type||'';
+    let nm=(c.name||'').trim(),mm;
+    if(/^R\d*\s*&\s*K\d*\b\s*/i.test(nm)){c.who.B=1;nm=nm.replace(/^R\d*\s*&\s*K\d*\b\s*/i,'')}
+    else if((mm=nm.match(/^([RK])\d*\s+/i))){c.who[mm[1].toUpperCase()]=1;nm=nm.slice(mm[0].length)}
+    else if(/^\?\s*/.test(nm))nm=nm.replace(/^\?\s*/,'');
+    c.name=nm.trim()||('Sound '+c.id);
+    const o=c.who.R?'R':c.who.K?'K':c.who.B?'B':'';
+    for(const k of c.clips){if(!k.vec){const x=new Float32Array(k.data.length);for(let i=0;i<x.length;i++)x[i]=k.data[i]/32767;
+      const f=features(x,k.sr);k.vec=f.vec;k.pk=f.pk}k.bird=o}}
+  mergeSameNames();m.v=2;return m}
 //</DSP>
 
 /* ===================== State & storage ===================== */
 const $=s=>document.querySelector(s),rnd=(a,b)=>a+Math.random()*(b-a),pick=a=>a[Math.floor(Math.random()*a.length)];
 const now=()=>performance.now()/1000;
-let M={clusters:[],q:{},hour:{ev:Array(24).fill(0),sec:Array(24).fill(0)},nextId:1,created:Date.now()};
+const newM=()=>({v:2,clusters:[],q:{},hour:{ev:Array(24).fill(0),evR:Array(24).fill(0),evK:Array(24).fill(0),sec:Array(24).fill(0)},turn:{},ansBird:{R:0,K:0},nextId:1,created:Date.now()});
+let M=newM();
 let db=null,saveT=null;
 function openDB(){return new Promise(res=>{try{const r=indexedDB.open('graychat',1);
   r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>{db=r.result;res()};r.onerror=()=>res()}catch(e){res()}})}
 function load(){return new Promise(res=>{if(!db)return res();try{const g=db.transaction('kv').objectStore('kv').get('model');
-  g.onsuccess=()=>{if(g.result)M=g.result;res()};g.onerror=()=>res()}catch(e){res()}})}
+  g.onsuccess=()=>{if(g.result)M=migrate(g.result);res()};g.onerror=()=>res()}catch(e){res()}})}
 function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{db&&db.transaction('kv','readwrite').objectStore('kv').put(M,'model')}catch(e){}},800)}
 
 /* ===================== Synth (fallback calls) ===================== */
@@ -158,11 +225,10 @@ const S={
  mimic(t){let x=t;const f=pick([1800,2000,2400]);for(let i=0;i<pick([2,3,4]);i++)x+=tone(x,[[0,f],[.14,f]],{type:'square',gain:.12})+.1;return x-t}};
 const SYN=Object.keys(S);
 
+function playF32(f,sr){const b=ctx.createBuffer(1,f.length,sr);b.getChannelData(0).set(f);
+  const s=ctx.createBufferSource();s.buffer=b;const g=ctx.createGain();g.gain.value=1.4;s.connect(g);g.connect(master);s.start();return b.duration}
 function playClip(c){const clip=pick(c.clips);if(!clip)return 0;
-  const f=new Float32Array(clip.data.length);for(let i=0;i<f.length;i++)f[i]=clip.data[i]/32767;
-  const b=ctx.createBuffer(1,f.length,clip.sr);b.getChannelData(0).set(f);
-  const s=ctx.createBufferSource();s.buffer=b;const g=ctx.createGain();g.gain.value=1.4;
-  s.connect(g);g.connect(master);s.start();return b.duration}
+  const f=new Float32Array(clip.data.length);for(let i=0;i<f.length;i++)f[i]=clip.data[i]/32767;return playF32(f,clip.sr)}
 
 /* ===================== Listening / event detection ===================== */
 let mode='learn',listening=false,floor=0.004,hot=0,inEv=false,evChunks=[],pre=[],quiet=0,evStart=0,muteUntil=0,lastAct=0,lastReply=0,
@@ -187,20 +253,30 @@ function finish(t,cd){
   setTimeout(()=>onBirdSound(x,sr,evStart,t),0)
 }
 function nearest(vec){let b=null,bd=9;for(const c of M.clusters){const d=dist(vec,c.vec);if(d<bd){bd=d;b=c}}return{c:b,d:bd}}
+let card=null,lastB=null;
 function onBirdSound(x,sr,t0,t1){
   const f=features(x,sr),{c,d}=nearest(f.vec);let cl;
   if(c&&d<strictThr()){cl=c;c.vec=c.vec.map((v,i)=>(v*c.n+f.vec[i])/(c.n+1));c.n++;c.dur=(c.dur*(c.n-1)+f.dur)/c.n}
-  else{cl={id:M.nextId++,name:'Sound '+(M.nextId-1),vec:f.vec,n:1,dur:f.dur,clips:[]};M.clusters.push(cl)}
-  if(cl.clips.length<5||Math.random()<.2){const i16=new Int16Array(x.length);for(let i=0;i<x.length;i++)i16[i]=Math.max(-1,Math.min(1,x[i]))*32767;
-    const clip={sr,data:i16};if(cl.clips.length<5)cl.clips.push(clip);else cl.clips[Math.floor(Math.random()*5)]=clip}
-  const h=new Date().getHours();M.hour.ev[h]++;
+  else{cl={id:M.nextId++,name:'Sound '+(M.nextId-1),vec:f.vec,n:1,dur:f.dur,clips:[],who:{R:0,K:0,B:0,M:0},auto:{R:0,K:0,'?':0},type:''};M.clusters.push(cl)}
+  const g=guessBird(f,cl);cl.auto[g.bird]=(cl.auto[g.bird]||0)+1;
+  const i16=new Int16Array(x.length);for(let i=0;i<x.length;i++)i16[i]=Math.max(-1,Math.min(1,x[i]))*32767;
+  const clip={sr,data:i16,vec:f.vec,pk:f.pk,bird:''};let stored=false;
+  if(cl.clips.length<5){cl.clips.push(clip);stored=true}
+  else if(Math.random()<.2){const j=cl.clips.findIndex(k=>!k.bird);if(j>=0){cl.clips[j]=clip;stored=true}}
+  const h=new Date().getHours();M.hour.ev[h]++;if(g.bird==='R')M.hour.evR[h]++;if(g.bird==='K')M.hour.evK[h]++;
+  if(lastB&&g.bird!=='?'&&lastB.b!=='?'&&t0-lastB.t<6&&lastB.b!==g.bird){const k=lastB.b+'>'+g.bird;M.turn[k]=(M.turn[k]||0)+1}
+  lastB={b:g.bird,t:t1};card={cl,f,x,sr,g,clip,stored,tag:null,type:null};
   lastEv=cl;lastAct=t1;unanswered=0;
-  // reward for pending action
   if(pending&&t0>=pending.end-0.05&&t0<=pending.deadline){
-    const r=1+(pending.played&&pending.played===cl.id?1:0);credit(pending.ctx,pending.action,r);pending=null}
-  save();render();
+    const r=1+(pending.played&&pending.played===cl.id?1:0);credit(pending.ctx,pending.action,r);
+    if(g.bird==='R'||g.bird==='K')M.ansBird[g.bird]++;pending=null}
+  save();render();renderCard();
   if(mode==='chat')setTimeout(()=>reply(cl),rnd(600,1100));
 }
+function ensureStored(k){if(k.stored)return;const cs=k.cl.clips;if(cs.length>=8){let j=cs.findIndex(c=>!c.bird);if(j<0)j=0;cs.splice(j,1)}cs.push(k.clip);k.stored=true}
+function tagBird(t){const k=card;if(!k)return;const w=k.cl.who;if(k.tag)w[k.tag]=Math.max(0,w[k.tag]-1);w[t]=(w[t]||0)+1;k.tag=t;
+  ensureStored(k);k.clip.bird=t;save();render();renderCard()}
+function tagType(t){const k=card;if(!k)return;k.type=t;k.cl.type=t;save();render();renderCard()}
 
 /* ===================== Policy (UCB bandit) ===================== */
 function credit(ctxk,a,r){const t=M.q[ctxk]||(M.q[ctxk]={}),s=t[a]||(t[a]={n:0,m:0});s.n++;s.m+=(r-s.m)/s.n;save();renderBrain()}
@@ -210,6 +286,7 @@ function perform(ctxk,a,cl){
   let dur=0,played=null;const t=ctx.currentTime+.05;
   if(a==='echo'&&cl&&cl.clips.length){dur=playClip(cl);played=cl.id}
   else if(a==='other'){const o=M.clusters.filter(c=>c.clips.length&&(!cl||c.id!==cl.id));if(o.length){const c=pick(o);dur=playClip(c);played=c.id}}
+  else if(a.startsWith('clip:')){const o=M.clusters.filter(c=>c.clips.length&&ownerOf(c).key===a[5]);if(o.length){const c=pick(o);dur=playClip(c);played=c.id}}
   else if(a==='clip'){const o=M.clusters.filter(c=>c.clips.length);if(o.length){const c=pick(o);dur=playClip(c);played=c.id}}
   else if(a.startsWith('synth:'))dur=S[a.slice(6)](t);
   const tn=now();muteUntil=tn+dur+.7;lastReply=tn;lastAct=tn+dur;
@@ -234,6 +311,7 @@ function tick(){
     if(t-chatStart>600){setMode('learn');banner('10 minutes of chatting done — back to listen-only. Give your bird a break! 🦜')}
     else if(!pending&&t>muteUntil&&t>cooldown&&t-lastAct>wait&&t-lastReply>6){
       const acts=['silence',...SYN.map(s=>'synth:'+s)];if(M.clusters.some(c=>c.clips.length))acts.push('clip');
+      ['R','K'].forEach(k=>{if(M.clusters.some(c=>c.clips.length&&ownerOf(c).key===k))acts.push('clip:'+k)});
       perform('idle',choose('idle',acts),null);wait=idleWait()*rnd(.8,1.3)}}
   if(M.hour.sec[h]%20===0)save();
   renderHours();
@@ -241,28 +319,53 @@ function tick(){
 
 /* ===================== UI ===================== */
 const nm=id=>{const c=M.clusters.find(c=>c.id===id);return c?c.name:'?'};
-function actLabel(a){if(a==='echo')return "its own sound, echoed back";if(a==='other')return 'a different sound it made';if(a==='clip')return 'one of its sounds';
+function actLabel(a){if(a==='echo')return "its own sound, echoed back";if(a==='other')return 'a different sound it made';if(a==='clip')return 'one of their sounds';if(a==='clip:R')return "one of Ruby's sounds";if(a==='clip:K')return "one of Kiwi's sounds";
   if(a==='silence')return 'stay quiet';return 'synth '+a.slice(6)}
+const BN={R:'Ruby',K:'Kiwi',B:'Both / not sure',M:'Ruby copying Kiwi','?':'?'},BC={R:'#b48cf2',K:'#f2a65a',B:'#8fb4ff',M:'#e68ad8','?':'#667'};
+let fBird='',fType='';
+function chips(sel,items,cur,cb,sug){const el=$(sel);el.innerHTML='';items.forEach(([v,l])=>{const b=document.createElement('button');b.textContent=l;
+  if(v===cur)b.className='sel';else if(sug&&v===sug)b.className='sug';b.onclick=()=>cb(v);el.appendChild(b)})}
+function ownLabel(c){const o=ownerOf(c);return o.key==='?'?'?':(BN[o.key]+(o.sure?'':'?'))}
+function renderCard(){const k=card,el=$('#heard');if(!k){el.style.display='none';return}
+  el.style.display='block';$('#hname').textContent=k.cl.name;const g=k.g;
+  $('#hguess').textContent=g.bird==='?'?'Not sure who':('Looks like '+BN[g.bird]+' ('+Math.round(g.conf*100)+'%)'+(g.mim?' – or Ruby copying':''));
+  chips('#hbird',[['R','Ruby'],['K','Kiwi'],['B','Both / not sure'],['M','Ruby copying Kiwi']],k.tag||'',tagBird,g.bird==='?'?'':g.bird);
+  chips('#htype',[['whistle','Whistle'],['sound','Sound'],['word','Word']],k.type||k.cl.type||'',tagType,k.cl.type?'':(k.f.fla<0.004?'whistle':'sound'));
+  $('#hp').onclick=()=>{if(ctx){const d=playF32(k.x,k.sr);muteUntil=now()+d+.7}}}
+function renderFilters(){
+  chips('#fbird',[['','All'],['R','Ruby'],['K','Kiwi'],['B','Both / copies']],fBird,v=>{fBird=v;render()});
+  chips('#ftype',[['','All types'],['whistle','Whistles'],['sound','Sounds'],['word','Words']],fType,v=>{fType=v;render()})}
 function render(){
-  const el=$('#sounds');if(!M.clusters.length){el.className='mute';el.textContent='Nothing heard yet. Start listening and let your bird chat.';renderBrain();return}
-  el.className='';el.innerHTML='';
-  [...M.clusters].sort((a,b)=>b.n-a.n).forEach(c=>{const d=document.createElement('div');d.className='snd';
-    d.innerHTML='<button title="Play">▶</button><input value=""><span class="n"></span><button title="Delete">✕</button>';
-    const [pb,,,xb]=d.children;d.children[1].value=c.name;d.children[2].textContent=c.n+'× · '+c.dur.toFixed(1)+'s';
+  renderFilters();const el=$('#sounds');
+  if(!M.clusters.length){el.className='mute';el.textContent='Nothing heard yet. Start listening and let them chat.';renderBrain();return}
+  const list=[...M.clusters].filter(c=>{const k=ownerOf(c).key;return(!fBird||(fBird==='B'?(k==='B'||k==='M'):k===fBird))&&(!fType||c.type===fType)}).sort((a,b)=>b.n-a.n);
+  el.className='';el.innerHTML='';if(!list.length){el.className='mute';el.textContent='No sounds match this filter.'}
+  list.forEach(c=>{const d=document.createElement('div');d.className='snd';const ok=ownerOf(c).key;
+    d.innerHTML='<div class="l1"><i class="dot"></i><button title="Play">▶</button><input><span class="n"></span></div><div class="l2"><select class="ob"></select><select class="ty"></select><button title="Delete">✕</button></div>';
+    const l1=d.children[0],l2=d.children[1];l1.children[0].style.background=BC[ok];
+    const pb=l1.children[1],inp=l1.children[2],cnt=l1.children[3],ob=l2.children[0],ty=l2.children[1],xb=l2.children[2];
+    inp.value=c.name;cnt.textContent=c.n+'× · '+c.dur.toFixed(1)+'s';
+    ob.innerHTML='<option value="">Who: auto ('+ownLabel(c)+')</option>'+['R','K','B','M'].map(k=>'<option value="'+k+'">'+BN[k]+'</option>').join('');ob.value=c.ownerSet||'';
+    ty.innerHTML='<option value="">Type?</option><option value="whistle">Whistle</option><option value="sound">Sound</option><option value="word">Word</option>';ty.value=c.type||'';
     pb.onclick=()=>{if(ctx&&c.clips.length){const dur=playClip(c);muteUntil=now()+dur+.7}};
-    d.children[1].onchange=e=>{c.name=e.target.value||c.name;save();renderBrain()};
-    xb.onclick=()=>{M.clusters=M.clusters.filter(k=>k!==c);delete M.q['c:'+c.id];save();render()};
+    inp.onchange=e=>{c.name=e.target.value.trim()||c.name;mergeSameNames();save();render()};
+    ob.onchange=e=>{c.ownerSet=e.target.value;save();render()};ty.onchange=e=>{c.type=e.target.value;save();render()};
+    xb.onclick=()=>{M.clusters=M.clusters.filter(k=>k!==c);delete M.q['c:'+c.id];if(card&&card.cl===c)card=null;save();render();renderCard()};
     el.appendChild(d)});
   renderBrain()}
 function renderBrain(){
   const out=[];for(const k in M.q){const t=M.q[k],tot=Object.values(t).reduce((a,s)=>a+s.n,0);if(tot<3)continue;
     const best=Object.entries(t).filter(([a,s])=>s.n>=2).sort((a,b)=>b[1].m-a[1].m)[0];if(!best)continue;
-    const who=k==='idle'?'When it’s quiet':'After “'+(M.clusters.find(c=>'c:'+c.id===k)||{name:'(deleted)'}).name+'”';
-    out.push('<li><b>'+who+'</b>: best so far → '+actLabel(best[0])+' <span class="mute">(bird answered '+Math.round(best[1].m*50)+'% of max, '+best[1].n+' tries)</span></li>')}
+    const cc=M.clusters.find(c=>'c:'+c.id===k);
+    const who=k==='idle'?'When it’s quiet':'After “'+(cc?cc.name+'” ('+ownLabel(cc)+')':'(deleted)”');
+    out.push('<li><b>'+who+'</b>: best so far → '+actLabel(best[0])+' <span class="mute">('+best[1].n+' tries)</span></li>')}
+  const T=M.turn,tr=[];if(T['K>R'])tr.push('Ruby answered Kiwi '+T['K>R']+'×');if(T['R>K'])tr.push('Kiwi answered Ruby '+T['R>K']+'×');
+  const A=M.ansBird;if(A.R||A.K)tr.push('Replies to the app: Ruby '+A.R+', Kiwi '+A.K);
+  if(tr.length)out.push('<li><b>Who talks to whom</b>: '+tr.join(' · ')+' <span class="mute">(from pitch guesses — Ruby copying Kiwi can blur this)</span></li>');
   $('#brain').className=out.length?'':'mute';
   $('#brain').innerHTML=out.length?'<ul>'+out.join('')+'</ul>':'Nothing yet — it needs a few exchanges in “Chat back” mode.'}
-function renderHours(){const rates=M.hour.ev.map((e,i)=>M.hour.sec[i]>30?e/(M.hour.sec[i]/60):0),mx=Math.max(...rates,1e-6);
-  $('#hours').innerHTML=rates.map(r=>'<div style="height:'+Math.max(4,r/mx*100)+'%"></div>').join('')}
+function renderHours(){const r=(e,i)=>M.hour.sec[i]>30?e[i]/(M.hour.sec[i]/60):0,R=M.hour.ev.map((_,i)=>r(M.hour.evR,i)),K=M.hour.ev.map((_,i)=>r(M.hour.evK,i)),mx=Math.max(...R,...K,1e-6);
+  $('#hours').innerHTML=R.map((v,i)=>'<div class="hb"><div class="p" style="height:'+Math.max(3,v/mx*100)+'%"></div><div class="o" style="height:'+Math.max(3,K[i]/mx*100)+'%"></div></div>').join('')}
 function banner(t){const b=$('#banner');b.textContent=t;b.style.display='block';setTimeout(()=>b.style.display='none',15000)}
 function setMode(m){mode=m;if(m==='chat'){chatStart=now();unanswered=0;cooldown=0;wait=idleWait();lastAct=now()}
   document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('sel',b.dataset.m===m))}
@@ -297,8 +400,8 @@ $('#exp').onclick=()=>{const m=JSON.parse(JSON.stringify(M,(k,v)=>v instanceof I
 $('#imp').onclick=()=>$('#file').click();
 $('#file').onchange=async e=>{const f=e.target.files[0];if(!f)return;
   M=JSON.parse(await f.text(),(k,v)=>{if(v&&v.__i16){const s=atob(v.__i16),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return new Int16Array(u.buffer)}return v});
-  save();render();renderHours()};
-$('#reset').onclick=()=>{if(confirm('Delete everything learned so far?')){M={clusters:[],q:{},hour:{ev:Array(24).fill(0),sec:Array(24).fill(0)},nextId:1,created:Date.now()};save();render();renderHours()}};
+  M=migrate(M);save();render();renderHours()};
+$('#reset').onclick=()=>{if(confirm('Delete everything learned so far?')){M=newM();card=null;save();render();renderCard();renderHours()}};
 openDB().then(load).then(()=>{render();renderHours()});
 </script>
 </body>
